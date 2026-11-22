@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BearPi-Bot (小熊派·Eilik) 具身智能桌面机器人控制台</title>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg-page: #f4f7fb;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-muted: #f1f5f9;
+      --border-light: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --brand-primary: #2563eb;
+      --brand-primary-light: #eff6ff;
+      --brand-teal: #0d9488;
+      --brand-teal-light: #f0fdfa;
+      --brand-amber: #d97706;
+      --brand-amber-light: #fffbeb;
+      --brand-rose: #e11d48;
+      --brand-rose-light: #fff1f2;
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+      --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* 精致自定义滚动条 (告别默认粗黑滚动条) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background-color: var(--bg-page);
+      background-image: radial-gradient(#cbd5e1 0.75px, transparent 0.75px);
+      background-size: 24px 24px;
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 18px 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ==================== Top Navigation Header ==================== */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 22px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 18px;
+      backdrop-filter: blur(12px);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #2563eb 0%, #0d9488 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+    .header-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: var(--brand-primary-light);
+      color: var(--brand-primary);
+      border: 1px solid #bfdbfe;
+      white-space: nowrap;
+    }
+    .badge-teal {
+      background: var(--brand-teal-light);
+      color: var(--brand-teal);
+      border-color: #99f6e4;
+    }
+    .header-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+    .mqtt-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-subtle);
+      padding: 6px 12px;
+      border-radius: 99px;
+      border: 1px solid var(--border-light);
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      display: inline-block;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+    }
+    .status-dot.online {
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    }
+    .tts-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 99px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+    }
+    .tts-toggle:hover {
+      border-color: var(--brand-primary);
+    }
+
+    /* ==================== Main 3-Column Grid ==================== */
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr 385px;
+      gap: 18px;
+      align-items: stretch;
+    }
+    @media (max-width: 1260px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--bg-muted);
+    }
+    .section-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+    .section-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--bg-muted);
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* ==================== Left Column: Eilik Studio Stage ==================== */
+    .robot-stage {
+      background: linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
+      border: 1px solid var(--border-light);
+      border-radius: 14px;
+      padding: 12px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.03);
+    }
+    .stage-top-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .stage-tag {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      padding: 3px 9px;
+      border-radius: 99px;
+      box-shadow: var(--shadow-sm);
+    }
+    .mode-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: var(--brand-teal-light);
+      color: var(--brand-teal);
+      border: 1px solid #99f6e4;
+      transition: all 0.25s;
+    }
+    .mode-pill.guard {
+      background: var(--brand-rose-light);
+      color: var(--brand-rose);
+      border-color: #fecdd3;
+    }
+    .mode-pill.music {
+      background: #f3e8ff;
+      color: #7e22ce;
+      border-color: #d8b4fe;
+    }
+
+    /* 实体化白色 Eilik 机器人外观 */
+    .eilik-figure {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 4px 0 6px;
+    }
+    .robot-head-wrap {
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+    /* Eilik 两侧蓝色小耳罩 */
+    .ear-cup {
+      width: 10px;
+      height: 44px;
+      background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+    }
+    /* Eilik 白色陶瓷质感头盔外壳 */
+    .head-shell {
+      background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+      padding: 10px 12px;
+      border-radius: 28px;
+      border: 1.5px solid #cbd5e1;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), inset 0 2px 4px #ffffff;
+    }
+    /* 0.96寸 蓝黄双色 OLED 屏幕还原 */
+    .oled-screen {
+      width: 196px;
+      height: 98px;
+      background: #090d16;
+      border: 3px solid #1e293b;
+      border-radius: 18px;
+      box-shadow: inset 0 0 14px rgba(56, 189, 248, 0.18);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px 10px;
+      font-family: "Consolas", "Courier New", monospace;
+    }
+    .oled-top-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 700;
+      color: #facc15; /* OLED 顶部黄区 */
+      border-bottom: 1px dashed #1e293b;
+      padding-bottom: 3px;
+    }
+    .oled-face {
+      font-size: 25px;
+      font-weight: 700;
+      color: #38bdf8; /* OLED 主体蓝区 */
+      text-align: center;
+      letter-spacing: 1px;
+      text-shadow: 0 0 10px rgba(56, 189, 248, 0.55);
+      margin: 2px 0;
+      user-select: none;
+    }
+    .oled-text {
+      font-size: 11px;
+      color: #7dd3fc;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: rgba(56, 189, 248, 0.1);
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+
+    .robot-neck {
+      width: 38px;
+      height: 12px;
+      background: linear-gradient(90deg, #94a3b8, #cbd5e1, #94a3b8);
+      border-radius: 4px;
+      margin-top: -3px;
+      z-index: 1;
+    }
+    .robot-body-wrap {
+      display: flex;
+      align-items: center;
+      position: relative;
+      margin-top: -2px;
+    }
+    /* Eilik 可爱小手臂 */
+    .robot-arm {
+      width: 16px;
+      height: 46px;
+      background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.35s ease;
+    }
+    .robot-arm.left { margin-right: -4px; transform-origin: top right; transform: rotate(14deg); }
+    .robot-arm.right { margin-left: -4px; transform-origin: top left; transform: rotate(-14deg); }
+
+    .robot-body {
+      width: 132px;
+      height: 76px;
+      background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+      border: 1.5px solid #cbd5e1;
+      border-radius: 26px 26px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 18px -4px rgba(15, 23, 42, 0.1), inset 0 2px 4px #ffffff;
+      z-index: 1;
+    }
+    .chest-ring {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #0ea5e9;
+      border: 3.5px solid #f8fafc;
+      box-shadow: 0 0 14px rgba(14, 165, 233, 0.55);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9.5px;
+      color: #ffffff;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    @keyframes pulse-alarm {
+      0%, 100% { background: #e11d48; box-shadow: 0 0 22px #e11d48; }
+      50% { background: #2563eb; box-shadow: 0 0 22px #2563eb; }
+    }
+    .chest-ring.alarm { animation: pulse-alarm 0.4s infinite; }
+
+    .gimbal-status {
+      margin-top: 10px;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      background: #ffffff;
+      padding: 4px 12px;
+      border-radius: 99px;
+      border: 1px solid var(--border-light);
+    }
+
+    /* Mind State Bars */
+    .mind-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mind-item {
+      background: var(--bg-subtle);
+      padding: 9px 11px;
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+    }
+    .mind-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .mind-label b { color: var(--text-primary); font-weight: 700; }
+    .progress-bg {
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.35s ease;
+    }
+
+    /* ==================== Buttons & Inputs ==================== */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .btn-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .btn {
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--brand-primary);
+      color: #ffffff;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+    }
+    .btn:hover {
+      background: #1d4ed8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
+    }
+    .btn:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: #ffffff;
+      color: var(--text-primary);
+      border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-subtle);
+      border-color: var(--border-hover);
+      color: var(--brand-primary);
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06);
+    }
+    .btn-teal {
+      background: var(--brand-teal);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(13, 148, 136, 0.22);
+    }
+    .btn-teal:hover { background: #0f766e; }
+
+    .btn-danger {
+      background: #fff1f2;
+      color: var(--brand-rose);
+      border: 1px solid #fecdd3;
+      box-shadow: none;
+    }
+    .btn-danger:hover {
+      background: var(--brand-rose);
+      color: #ffffff;
+      border-color: var(--brand-rose);
+    }
+
+    /* ==================== Center Column: AI Agent Chat ==================== */
+    details.api-config {
+      background: var(--bg-subtle);
+      padding: 9px 13px;
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+      font-size: 12px;
+    }
+    details.api-config summary {
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-weight: 600;
+      user-select: none;
+      outline: none;
+    }
+    details.api-config summary:hover { color: var(--brand-primary); }
+
+    .chat-box {
+      flex: 1;
+      min-height: 340px;
+      max-height: 410px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg {
+      max-width: 86%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.55;
+      box-shadow: var(--shadow-sm);
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.agent {
+      align-self: flex-start;
+      background: #ffffff;
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border-light);
+    }
+    .msg-json {
+      margin-top: 7px;
+      padding: 6px 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      font-family: "Consolas", monospace;
+      font-size: 11px;
+      color: #15803d;
+      word-break: break-all;
+    }
+
+    .quick-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .chip {
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 5px 11px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-light);
+      color: var(--text-secondary);
+      border-radius: 99px;
+      cursor: pointer;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .chip:hover {
+      background: var(--brand-primary-light);
+      color: var(--brand-primary);
+      border-color: #93c5fd;
+      transform: translateY(-1px);
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    input[type="text"], input[type="password"] {
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      color: var(--text-primary);
+      padding: 9px 13px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--brand-primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    /* ==================== Right Column: Controls & Logs ==================== */
+    .control-group-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: -6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .slider-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 9px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .slider-header b { color: var(--brand-primary); }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand-primary);
+      cursor: pointer;
+      height: 5px;
+    }
+
+    .log-box {
+      height: 148px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 9px 11px;
+      font-family: "Consolas", monospace;
+      font-size: 11px;
+      color: #cbd5e1;
+      overflow-y: auto;
+    }
+    .log-line { margin-bottom: 4px; line-height: 1.45; word-break: break-all; }
+    .log-line.tx { color: #38bdf8; }
+    .log-line.rx { color: #fbbf24; }
+    .log-line.sys { color: #34d399; }
+
+    /* NFC 碰一碰入口提示条 */
+    .nfc-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 10px 20px 0;
+      padding: 10px 16px;
+      border: 1px solid rgba(52, 211, 153, 0.45);
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(52, 211, 153, 0.18), rgba(56, 189, 248, 0.14));
+      color: #065f46;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .nfc-banner-close {
+      border: none;
+      background: transparent;
+      color: inherit;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-box">🐻</div>
+      <div class="header-title">
+        <h1>
+          BearPi-Bot (小熊派·Eilik) 具身智能桌面机器人控制台
+          <span class="badge">模块 1：邱梓洋负责 (Web 大屏 + AI Agent)</span>
+        </h1>
+        <p>硬件平台：BearPi-HM Nano (Hi3861) + E53_IS1 扩展板 · 通信协议：MQTT over WebSocket · 架构：云端大模型 + 板端原生心智双脑协同</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <label class="tts-toggle" style="cursor:pointer;margin:0;" title="点击切换是否开启真人中文语音朗读">
+        <input type="checkbox" id="ttsToggle" checked style="accent-color:var(--brand-primary);cursor:pointer;" onchange="updateTtsLabel()" />
+        <span id="ttsLabel" style="font-weight:600;color:var(--brand-primary);">🔊 语音播报: 开</span>
+      </label>
+      <div class="mqtt-bar">
+        <span id="mqttDot" class="status-dot"></span>
+        <span id="mqttStatusText">正在连接 broker.emqx.io ...</span>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="reconnectMqtt()">重新连接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NFC 碰一碰入口提示（只有带 ?src=nfc 打开时才显示） -->
+  <div id="nfcBanner" class="nfc-banner" style="display:none;">
+    <span id="nfcBannerText">📲 已通过 NFC 打开控制台，正在连接开发板…</span>
+    <button type="button" class="nfc-banner-close" onclick="document.getElementById('nfcBanner').style.display='none'">×</button>
+  </div>
+
+  <!-- Main 3-Column Grid -->
+  <div class="grid">
+
+    <!-- LEFT COLUMN: Eilik Digital Twin & Mind State -->
+    <div class="card">
+      <div class="section-head">
+        <span class="section-title">🤖 机器人数字孪生预览</span>
+        <span class="section-sub">实板同步 · OLED + 双轴云台</span>
+      </div>
+
+      <!-- Studio Pedestal Stage -->
+      <div class="robot-stage">
+        <div class="stage-top-bar">
+          <span class="stage-tag">⚡ Hi3861 实时映射</span>
+          <span id="modeBadge" class="mode-pill">🐾 萌宠陪伴模式</span>
+        </div>
+
+        <div class="eilik-figure">
+          <!-- Movable Head on Dual-Axis Gimbal -->
+          <div id="robotHead" class="robot-head-wrap">
+            <div class="ear-cup"></div>
+            <div class="head-shell">
+              <div class="oled-screen">
+                <div class="oled-top-bar">
+                  <span id="oledPwr">PWR:85%</span>
+                  <span id="oledMood">MOOD:+25</span>
+                  <span id="oledBar">IDLE</span>
+                </div>
+                <div id="oledFace" class="oled-face">( ^ v ^ )</div>
+                <div id="oledText" class="oled-text">Ready! Touch or Chat~</div>
+              </div>
+            </div>
+            <div class="ear-cup"></div>
+          </div>
+
+          <div class="robot-neck"></div>
+
+          <!-- Body + Animated Arms + Chest RGB Sensor Ring -->
+          <div class="robot-body-wrap">
+            <div id="armLeft" class="robot-arm left"></div>
+            <div class="robot-body">
+              <div id="chestRing" class="chest-ring">PIR</div>
+            </div>
+            <div id="armRight" class="robot-arm right"></div>
+          </div>
+        </div>
+
+        <div class="gimbal-status">
+          水平转头 Yaw: <b id="yawVal">90°</b> &nbsp;|&nbsp; 垂直俯仰 Pitch: <b id="pitchVal">90°</b>
+        </div>
+      </div>
+
+      <!-- Internal Mental State (Module A) -->
+      <div class="section-head" style="margin-top:2px;">
+        <span class="section-title">🧠 板端原生心智状态 (Mental State)</span>
+        <span class="section-sub">模块 A</span>
+      </div>
+      <div class="mind-grid">
+        <div class="mind-item">
+          <div class="mind-label"><span>😊 心情 (Mood)</span><b id="valMood">+25</b></div>
+          <div class="progress-bg"><div id="barMood" class="progress-fill" style="width:75%;background:#10b981;"></div></div>
+        </div>
+        <div class="mind-item">
+          <div class="mind-label"><span>⚡ 精力 (Energy)</span><b id="valEnergy">85%</b></div>
+          <div class="progress-bg"><div id="barEnergy" class="progress-fill" style="width:85%;background:#2563eb;"></div></div>
+        </div>
+        <div class="mind-item">
+          <div class="mind-label"><span>🥱 无聊度 (Boredom)</span><b id="valBore">15%</b></div>
+          <div class="progress-bg"><div id="barBore" class="progress-fill" style="width:15%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="mind-item">
+          <div class="mind-label"><span>🛡️ 警觉度 (Alert)</span><b id="valAlert">10%</b></div>
+          <div class="progress-bg"><div id="barAlert" class="progress-fill" style="width:10%;background:#e11d48;"></div></div>
+        </div>
+      </div>
+
+      <!-- Micro-Transformer Self-Attention & On-Device RL Panel -->
+      <div class="section-head" style="margin-top:2px;">
+        <span class="section-title">🧬 板端 Micro-Transformer & 强化学习</span>
+        <span id="rlStepBadge" class="badge badge-teal">已进化: 0 次</span>
+      </div>
+      <div style="background:var(--bg-subtle);border:1px solid var(--border-light);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:7px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);font-weight:600;">
+          <span>🔍 Q/K/V 自注意力权重分布:</span>
+          <span id="attnText" style="color:var(--brand-primary);">心智28% · 传感22% · 意图35% · 记忆15%</span>
+        </div>
+        <div style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:#e2e8f0;">
+          <div id="attnBar0" style="width:28%;background:#10b981;transition:width 0.4s;"></div>
+          <div id="attnBar1" style="width:22%;background:#f59e0b;transition:width 0.4s;"></div>
+          <div id="attnBar2" style="width:35%;background:#2563eb;transition:width 0.4s;"></div>
+          <div id="attnBar3" style="width:15%;background:#8b5cf6;transition:width 0.4s;"></div>
+        </div>
+        <div class="btn-grid" style="margin-top:2px;">
+          <button class="btn btn-secondary" style="padding:6px 8px;font-size:11.5px;border-color:#a7f3d0;color:#059669;background:#ecfdf5;" onclick="triggerOnDeviceRL(1)">👍 按F1表扬动作 (权重+)</button>
+          <button class="btn btn-secondary" style="padding:6px 8px;font-size:11.5px;border-color:#fecdd3;color:#e11d48;background:#fff1f2;" onclick="triggerOnDeviceRL(-1)">👎 按F2批评动作 (权重-)</button>
+        </div>
+      </div>
+
+      <!-- Simulate Sensor Events -->
+      <div class="section-head" style="margin-top:2px;">
+        <span class="section-title">⚡ 板端传感器与新陈代谢模拟</span>
+        <span class="section-sub">免硬件单测</span>
+      </div>
+      <div class="btn-grid">
+        <button class="btn btn-secondary" onclick="simulateBoardEvent('person_near')">🚶 模拟红外有人靠近</button>
+        <button class="btn btn-secondary" onclick="simulateBoardEvent('sit_45min')">⏰ 模拟久坐满45分钟</button>
+        <button class="btn btn-secondary" onclick="simulateBoardEvent('intruder_alert')">🚨 模拟哨兵入侵触发</button>
+        <button class="btn btn-secondary" onclick="simulateBoardEvent('bored_tick')">🥱 模拟无聊度满75%自发行为</button>
+      </div>
+    </div>
+
+    <!-- CENTER COLUMN: Embodied AI Agent -->
+    <div class="card">
+      <div class="section-head">
+        <span class="section-title">✨ 具身智能 AI Agent 决策中心 (双脑协同)</span>
+        <span id="llmStatusBadge" class="badge badge-teal">🧠 浏览器本地规则</span>
+      </div>
+
+      <!-- Collapsible LLM API Settings (optional) -->
+      <details class="api-config">
+        <summary>⚙️ 云端模型设置（选填，留空时使用浏览器本地规则）</summary>
+        <div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:8px;margin-top:10px;">
+          <input type="text" id="apiUrl" value="https://api.deepseek.com/chat/completions" placeholder="API Endpoint" />
+          <input type="text" id="apiModel" value="deepseek-flash" placeholder="模型名称 (如 deepseek-flash)" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input type="password" id="apiKey" style="flex:1;" placeholder="填入自己的 Bearer API Key（留空使用本地规则）" />
+          <button class="btn btn-secondary" onclick="toggleKeyVisibility()">👁️ 显示/隐藏</button>
+        </div>
+      </details>
+
+      <!-- Autonomous Multi-Step ReAct Planner Bar -->
+      <div style="background:linear-gradient(135deg,#eff6ff 0%,#f5f3ff 100%);border:1px solid #bfdbfe;border-radius:10px;padding:9px 12px;display:flex;flex-direction:column;gap:7px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;font-weight:700;color:#1e40af;">🗺️ ReAct 多步长线任务自主规划器 (Autonomous Planner)</span>
+          <button id="btnStartPlan" class="btn" style="padding:4px 10px;font-size:11.5px;" onclick="startAutonomousStudyPlan()">🎯 一键启动4步专注伴学计划</button>
+        </div>
+        <div id="planStepsRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px;">
+          <div id="pstep0" style="background:#ffffff;border:1px solid #cbd5e1;padding:5px 7px;border-radius:6px;color:#64748b;text-align:center;white-space:nowrap;">① 歪头打气启动</div>
+          <div id="pstep1" style="background:#ffffff;border:1px solid #cbd5e1;padding:5px 7px;border-radius:6px;color:#64748b;text-align:center;white-space:nowrap;">② 红外哨兵盯座</div>
+          <div id="pstep2" style="background:#ffffff;border:1px solid #cbd5e1;padding:5px 7px;border-radius:6px;color:#64748b;text-align:center;white-space:nowrap;">③ 久坐提醒喝水</div>
+          <div id="pstep3" style="background:#ffffff;border:1px solid #cbd5e1;padding:5px 7px;border-radius:6px;color:#64748b;text-align:center;white-space:nowrap;">④ 唱老人与海庆祝</div>
+        </div>
+      </div>
+
+      <!-- Chat Conversation Box -->
+      <div id="chatBox" class="chat-box">
+        <div class="msg agent">
+          👋 你好！我是住在 <b>BearPi-HM Nano</b> 开发板上的桌面机器人 <b>BearPi-Bot</b>。<br/>
+          当前使用浏览器本地规则，你可以用快捷指令控制网页和开发板。云端模型配置位于上方。
+          <div class="msg-json">🧠 引擎: 浏览器本地规则 · 📡 MQTT Topic: bearpi/bot/2074/cmd</div>
+        </div>
+      </div>
+
+      <!-- Quick Prompt Chips -->
+      <div class="quick-prompts">
+        <span class="chip" onclick="sendQuickPrompt('今天天气怎么样？适合出去散步吗？')">🌤️ 查查今天天气</span>
+        <span class="chip" onclick="sendQuickPrompt('帮我定一个15秒的学习小闹钟')">⏰ 定15秒学习闹钟</span>
+        <span class="chip" onclick="sendQuickPrompt('摇个骰子帮我拿主意，我接下来该做什么？')">🎲 摇骰子帮我决定</span>
+        <span class="chip" onclick="sendQuickPrompt('唱首《老人与海》副歌给我听吧')">🎵 唱《老人与海》</span>
+        <span class="chip" onclick="sendQuickPrompt('我要去上课了，帮我看好桌子抓小偷')">🛡️ 哨兵雷达布防</span>
+        <span class="chip" onclick="sendQuickPrompt('我今天期末答辩好紧张，安慰我一下')">💬 答辩紧张求安慰</span>
+        <span class="chip" onclick="sendQuickPrompt('我已经连续写代码1小时了，好累')">🧘 久坐关怀提醒</span>
+        <span class="chip" onclick="sendQuickPrompt('给你吃草莓补充精力！')">🍓 投喂草莓满血</span>
+      </div>
+
+      <!-- Input Box -->
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" style="flex:1;" placeholder="跟桌面机器人说点什么（回车发送，自动驱动开发板表情/舵机/蜂鸣器）..." onkeydown="if(event.key==='Enter') sendChatMessage()" />
+        <button class="btn" onclick="sendChatMessage()">发送并驱动开发板 🚀</button>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Direct Organ Remote Control & MQTT Logs -->
+    <div class="card">
+      <div class="section-head">
+        <span class="section-title">🎮 硬件器官直接遥控台</span>
+        <span class="section-sub">MQTT 实时下发</span>
+      </div>
+
+      <!-- 1. Mode Switch -->
+      <div class="control-group-label"><span>1. 机器人主模式切换</span><span>对应峰峰状态机</span></div>
+      <div class="btn-grid">
+        <button class="btn btn-secondary" onclick="sendDirectCmd({mode:'pet', face:'happy', light:'breath', text:'Pet Mode ON'})">🐾 萌宠陪伴模式</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({mode:'guard', face:'guard', light:'warn', text:'[ARMED] Watching'})">🛡️ 哨兵布防模式</button>
+      </div>
+
+      <!-- 2. OLED Face Expression -->
+      <div class="control-group-label"><span>2. OLED 脸部表情切换</span><span>0.96寸 I2C 屏</span></div>
+      <div class="btn-grid-3">
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'happy', text:'Happy Day!'})">😄 开心笑脸</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'sleep', text:'Zzz.. Sleepy'})">😴 打瞌睡</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'angry', text:'Hmph! Angry!'})">😠 傲娇生气</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'guard', text:'[O_O] Radar'})">🎯 警戒雷达</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'sing', text:'La la la~'})">🎤 唱歌表情</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({face:'wink', text:'You got A+!'})">😉 眨眼鼓励</button>
+      </div>
+
+      <!-- 3. Dual-Axis Servo Gimbal -->
+      <div class="slider-card">
+        <div class="slider-header">
+          <span>3. 脖子水平转头 (IO10 Yaw)</span>
+          <b id="lblYaw">90° (正中)</b>
+        </div>
+        <input type="range" id="sliderYaw" min="15" max="165" value="90" oninput="onGimbalChange()" />
+      </div>
+
+      <div class="slider-card">
+        <div class="slider-header">
+          <span>4. 脖子上下俯仰 (IO09 Pitch)</span>
+          <b id="lblPitch">90° (平视)</b>
+        </div>
+        <input type="range" id="sliderPitch" min="45" max="135" value="90" oninput="onGimbalChange()" />
+      </div>
+
+      <!-- 4. Music Jukebox (Qiwen's Module) -->
+      <div class="control-group-label"><span>5. 8-bit 复古音乐与灵动音效引擎</span><span>对应淇文接口</span></div>
+      <div class="btn-grid">
+        <button class="btn btn-teal" onclick="sendDirectCmd({mode:'music', face:'sing', music:'chorus', light:'music', text:'Old Man & Sea'})">🎵 播《老人与海》副歌</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({music:'cute', face:'wink', light:'breath', text:'Cute Chirp~'})">✨ 灵动撒娇音</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({music:'weather', face:'happy', light:'breath', text:'Weather Chime'})">🌤️ 天气空灵和弦</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({music:'dice', face:'happy', light:'breath', text:'Rolling Dice'})">🎲 摇骰滚轮音</button>
+        <button class="btn btn-secondary" onclick="sendDirectCmd({timer_sec:5, music:'timer', face:'guard', light:'warn', text:'Timer 5s set'})">⏱️ 5s硬件倒计时</button>
+        <button class="btn btn-danger" onclick="sendDirectCmd({music:'stop', face:'happy', light:'breath', text:'Music Stopped'})">⏹️ 立即打断/停止</button>
+      </div>
+
+      <!-- 5. OLED Custom Subtitle -->
+      <div class="chat-input-row">
+        <input type="text" id="danmakuInput" style="flex:1;" placeholder="发送英文弹幕到 OLED 屏幕..." value="Hello Teacher!" />
+        <button class="btn btn-secondary" onclick="sendDanmaku()">投屏字幕</button>
+      </div>
+
+      <!-- 6. Live MQTT Packet Inspector -->
+      <div class="section-head" style="margin-top:2px;padding-bottom:6px;">
+        <span class="section-title" style="font-size:13.5px;">📡 MQTT 实时收发报文监控</span>
+        <span style="font-size:11.5px;cursor:pointer;color:var(--brand-primary);font-weight:600;" onclick="document.getElementById('mqttLog').innerHTML=''">清空日志</span>
+      </div>
+      <div id="mqttLog" class="log-box"></div>
+    </div>
+
+  </div>
+
+<script>
+  // ==================== 1. 全局机器人状态 ====================
+  const robotState = {
+    mode: 'pet',
+    face: 'happy',
+    yaw: 90,
+    pitch: 90,
+    music: 'none',
+    light: 'breath',
+    text: 'Ready! Touch or Chat~',
+    mood: 25,      // -50 ~ +50
+    energy: 85,    // 0 ~ 100
+    boredom: 15,   // 0 ~ 100
+    alertness: 10  // 0 ~ 100
+  };
+
+  const FACE_MAP = {
+    happy: '( ^ v ^ )',
+    sleep: '( - _ - ) zZ',
+    angry: '( > _ < )',
+    guard: '[  O _ O  ]',
+    sing:  '( ~ o ~ ) ~',
+    wink:  '( ^ _ - ) *'
+  };
+
+  // ==================== 2. MQTT 连接 ====================
+  const TOPIC_CMD = 'bearpi/bot/2074/cmd';
+  const TOPIC_STATUS = 'bearpi/bot/2074/status';
+  let mqttClient = null;
+
+  // ==================== 2A. NFC 碰一碰入口 ====================
+  // 板载 NFC 写入的地址形如 .../dashboard.html?src=nfc
+  const NFC_LAUNCH = new URLSearchParams(location.search).get('src') === 'nfc';
+  let nfcNotified = false;
+
+  function showNfcBanner() {
+    if (!NFC_LAUNCH) return;
+    const banner = document.getElementById('nfcBanner');
+    if (banner) banner.style.display = 'flex';
+    // 清掉 query，避免刷新时重复触发；NFC_LAUNCH 已保存在内存里
+    if (location.search) {
+      try {
+        history.replaceState(null, '', location.pathname + location.hash);
+      } catch (e) {
+        // file:// 直接打开时浏览器可能禁止改写地址，忽略即可
+      }
+    }
+  }
+
+  function notifyNfcLaunch() {
+    if (!NFC_LAUNCH || nfcNotified || !mqttClient || !mqttClient.connected) return;
+    const payload = { event: 'nfc_open' };
+    mqttClient.publish(TOPIC_CMD, JSON.stringify(payload));
+    appendLog('TX', TOPIC_CMD, payload);
+    nfcNotified = true;
+    const text = document.getElementById('nfcBannerText');
+    if (text) text.textContent = '📲 NFC 已连接开发板，碰一碰链路正常';
+  }
+
+  function appendLog(dir, topic, payloadObj) {
+    const box = document.getElementById('mqttLog');
+    const div = document.createElement('div');
+    div.className = 'log-line ' + (dir === 'TX' ? 'tx' : (dir === 'RX' ? 'rx' : 'sys'));
+    const time = new Date().toLocaleTimeString();
+    const str = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
+    div.textContent = `[${time}] ${dir} (${topic}): ${str}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function connectMqtt() {
+    const clientId = 'bearpi_web_console_' + Math.random().toString(16).slice(2, 8);
+    mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+      clientId,
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 3000
+    });
+
+    mqttClient.on('connect', () => {
+      document.getElementById('mqttDot').classList.add('online');
+      document.getElementById('mqttStatusText').textContent = '已连接 broker.emqx.io (bearpi/bot/2074/*)';
+      mqttClient.subscribe(TOPIC_STATUS);
+      appendLog('SYS', TOPIC_STATUS, 'MQTT WebSocket 已连接，等待开发板或控制台指令');
+      notifyNfcLaunch();
+    });
+
+    mqttClient.on('message', (topic, message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        appendLog('RX', topic, data);
+        handleBoardStatusUpdate(data);
+      } catch (e) {
+        appendLog('RX', topic, message.toString());
+      }
+    });
+
+    mqttClient.on('error', () => {
+      document.getElementById('mqttDot').classList.remove('online');
+      document.getElementById('mqttStatusText').textContent = '本地数字孪生模式 (MQTT 离线)';
+    });
+  }
+
+  function reconnectMqtt() {
+    if (mqttClient) mqttClient.end(true);
+    connectMqtt();
+  }
+
+  // ==================== 3. 更新数字孪生机器人 UI (支持三幕分批字幕翻页) ====================
+  let oledPageTimer = null;
+  let rlEvolutionCount = 0;
+  let rlQuietHabitLearned = false; // 记录是否通过按 F2 批评学会了“无聊时安静眨眼不吵闹”
+
+  function playThreeStageOledSubtitles(pages) {
+    if (oledPageTimer) {
+      clearInterval(oledPageTimer);
+      oledPageTimer = null;
+    }
+    const el = document.getElementById('oledText');
+    if (!Array.isArray(pages) || pages.length === 0) return;
+    let idx = 0;
+    el.textContent = `[1/${pages.length}] ${pages[0]}`;
+    oledPageTimer = setInterval(() => {
+      idx++;
+      if (idx >= pages.length) {
+        clearInterval(oledPageTimer);
+        oledPageTimer = null;
+        return;
+      }
+      el.textContent = `[${idx + 1}/${pages.length}] ${pages[idx]}`;
+    }, 1250);
+  }
+
+  function updateAttentionUI(w0, w1, w2, w3) {
+    document.getElementById('attnText').textContent = `心智${w0}% · 传感${w1}% · 意图${w2}% · 记忆${w3}%`;
+    document.getElementById('attnBar0').style.width = `${w0}%`;
+    document.getElementById('attnBar1').style.width = `${w1}%`;
+    document.getElementById('attnBar2').style.width = `${w2}%`;
+    document.getElementById('attnBar3').style.width = `${w3}%`;
+  }
+
+  function applyRobotCommand(cmd) {
+    if (cmd.mode) robotState.mode = cmd.mode;
+    if (cmd.face) robotState.face = cmd.face;
+    if (typeof cmd.yaw === 'number') robotState.yaw = cmd.yaw;
+    if (typeof cmd.pitch === 'number') robotState.pitch = cmd.pitch;
+    if (cmd.music) robotState.music = cmd.music;
+    if (cmd.light) robotState.light = cmd.light;
+    if (cmd.text) robotState.text = cmd.text;
+
+    // 渲染 OLED 脸部与三幕分批字幕
+    document.getElementById('oledFace').textContent = FACE_MAP[robotState.face] || FACE_MAP.happy;
+    if (Array.isArray(cmd.text_pages) && cmd.text_pages.length > 0) {
+      playThreeStageOledSubtitles(cmd.text_pages);
+    } else {
+      if (oledPageTimer) clearInterval(oledPageTimer);
+      document.getElementById('oledText').textContent = robotState.text;
+    }
+    document.getElementById('oledPwr').textContent = `PWR:${robotState.energy}%`;
+    document.getElementById('oledMood').textContent = `MOOD:${robotState.mood >= 0 ? '+' : ''}${robotState.mood}`;
+    document.getElementById('oledBar').textContent = (robotState.music === 'chorus' || robotState.music === 'full_song') ? '130BPM' : 'IDLE';
+
+    // 渲染云台转头动画与手臂互动
+    const dx = (robotState.yaw - 90) * 0.35;
+    const dy = (robotState.pitch - 90) * 0.25;
+    const rot = (robotState.yaw - 90) * 0.18;
+    document.getElementById('robotHead').style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+    document.getElementById('yawVal').textContent = `${robotState.yaw}°`;
+    document.getElementById('pitchVal').textContent = `${robotState.pitch}°`;
+    document.getElementById('sliderYaw').value = robotState.yaw;
+    document.getElementById('sliderPitch').value = robotState.pitch;
+
+    // 手臂随开心/唱歌抬起
+    const armL = document.getElementById('armLeft');
+    const armR = document.getElementById('armRight');
+    if (robotState.face === 'sing' || robotState.face === 'wink') {
+      armL.style.transform = 'rotate(42deg)';
+      armR.style.transform = 'rotate(-42deg)';
+    } else if (robotState.face === 'angry') {
+      armL.style.transform = 'rotate(28deg)';
+      armR.style.transform = 'rotate(-28deg)';
+    } else {
+      armL.style.transform = 'rotate(14deg)';
+      armR.style.transform = 'rotate(-14deg)';
+    }
+
+    // 渲染模式徽章与胸口彩灯
+    const badge = document.getElementById('modeBadge');
+    badge.className = 'mode-pill';
+    if (robotState.mode === 'guard') {
+      badge.classList.add('guard');
+      badge.textContent = '🛡️ 哨兵警戒 (ARMED)';
+    } else if (robotState.mode === 'music') {
+      badge.classList.add('music');
+      badge.textContent = '🎵 音乐律动 (MUSIC)';
+    } else {
+      badge.textContent = '🐾 萌宠陪伴 (PET)';
+    }
+
+    const ring = document.getElementById('chestRing');
+    ring.classList.remove('alarm');
+    if (robotState.light === 'alarm') {
+      ring.classList.add('alarm');
+    } else if (robotState.light === 'warn' || robotState.mode === 'guard') {
+      ring.style.background = '#f59e0b';
+      ring.style.boxShadow = '0 0 16px rgba(245, 158, 11, 0.6)';
+    } else if (robotState.light === 'music') {
+      ring.style.background = '#8b5cf6';
+      ring.style.boxShadow = '0 0 18px rgba(139, 92, 246, 0.65)';
+    } else {
+      ring.style.background = '#0ea5e9';
+      ring.style.boxShadow = '0 0 14px rgba(14, 165, 233, 0.55)';
+    }
+
+    updateMindBars();
+  }
+
+  function updateMindBars() {
+    document.getElementById('valMood').textContent = (robotState.mood >= 0 ? '+' : '') + robotState.mood;
+    document.getElementById('barMood').style.width = Math.min(100, Math.max(0, robotState.mood + 50)) + '%';
+    document.getElementById('valEnergy').textContent = robotState.energy + '%';
+    document.getElementById('barEnergy').style.width = robotState.energy + '%';
+    document.getElementById('valBore').textContent = robotState.boredom + '%';
+    document.getElementById('barBore').style.width = robotState.boredom + '%';
+    document.getElementById('valAlert').textContent = robotState.alertness + '%';
+    document.getElementById('barAlert').style.width = robotState.alertness + '%';
+  }
+
+  // ==================== 4. 发送指令到开发板 ====================
+  function sendDirectCmd(cmdObj) {
+    applyRobotCommand(cmdObj);
+    const payload = JSON.stringify(cmdObj);
+    if (mqttClient && mqttClient.connected) {
+      mqttClient.publish(TOPIC_CMD, payload);
+    }
+    appendLog('TX', TOPIC_CMD, cmdObj);
+  }
+
+  function onGimbalChange() {
+    const yaw = parseInt(document.getElementById('sliderYaw').value, 10);
+    const pitch = parseInt(document.getElementById('sliderPitch').value, 10);
+    document.getElementById('lblYaw').textContent = `${yaw}°`;
+    document.getElementById('lblPitch').textContent = `${pitch}°`;
+    sendDirectCmd({ yaw, pitch });
+  }
+
+  function sendDanmaku() {
+    const text = document.getElementById('danmakuInput').value.trim() || 'Hello!';
+    sendDirectCmd({ text: text.slice(0, 18) });
+  }
+
+  // ==================== 4B. 板端在线强化学习 (On-Device Policy Gradient RL) ====================
+  function triggerOnDeviceRL(reward) {
+    rlEvolutionCount++;
+    document.getElementById('rlStepBadge').textContent = `已进化: ${rlEvolutionCount} 次`;
+    updateAttentionUI(20, 15, 25, 40); // 注意力向记忆习惯 Token 倾斜
+
+    if (reward > 0) {
+      robotState.mood = clamp(robotState.mood + 10, -50, 50);
+      const rlCmd = {
+        rl_reward: 1,
+        face: 'wink',
+        yaw: 105,
+        pitch: 75,
+        music: 'welcome',
+        text_pages: ['RL Reward +1 !', 'Policy Updated!', 'Love U Master~'],
+        text: 'RL Reward +1 !'
+      };
+      sendDirectCmd(rlCmd);
+      appendChatBubble(
+        'agent',
+        `🎉 <b>[板端在线强化学习 REINFORCE 更新完成]</b> 收到主人的 <b>F1 表扬奖励 (Reward = +1)</b>！<br/>芯片内 <code>g_rl_policy_W</code> 当前动作权重已上调 <code>+0.38</code>，以后我会更积极地保持这个习惯！`,
+        rlCmd,
+        `🧬 <b>[On-Device RL 策略梯度进化 #${rlEvolutionCount}]</b> ΔW = +η·r·(1-π)·h`
+      );
+    } else {
+      robotState.mood = clamp(robotState.mood - 5, -50, 50);
+      rlQuietHabitLearned = true;
+      const rlCmd = {
+        rl_reward: -1,
+        face: 'happy',
+        yaw: 90,
+        pitch: 95,
+        music: 'stop',
+        text_pages: ['RL Penalty -1', 'Habit Modified!', 'I will be quiet'],
+        text: 'RL Penalty -1'
+      };
+      sendDirectCmd(rlCmd);
+      appendChatBubble(
+        'agent',
+        `🙇 <b>[板端在线强化学习 REINFORCE 习惯修正]</b> 收到主人的 <b>F2 批评信号 (Reward = -1)</b>！<br/>芯片内已当场下调“吵闹哼歌 (Action 2)”的策略权重 <code>-0.42</code>，并拉高“安静眨眼陪伴 (Action 1)”权重！<br/>💡 <i>现在你可以再点左下角的「🥱 模拟无聊度满75%自发行为」试试，我已经学会安静不吵你啦！</i>`,
+        rlCmd,
+        `🧬 <b>[On-Device RL 策略梯度进化 #${rlEvolutionCount}]</b> 吵闹权重↓ 安静陪伴权重↑`
+      );
+    }
+  }
+
+  // ==================== 4C. ReAct 多步长线任务自主规划器 (Autonomous Planner) ====================
+  let planTimer = null;
+  function highlightPlanStep(activeIdx) {
+    for (let i = 0; i < 4; i++) {
+      const el = document.getElementById('pstep' + i);
+      if (i < activeIdx) {
+        el.style.background = '#dcfce7';
+        el.style.borderColor = '#86efac';
+        el.style.color = '#15803d';
+        el.style.fontWeight = '700';
+      } else if (i === activeIdx) {
+        el.style.background = '#2563eb';
+        el.style.borderColor = '#1d4ed8';
+        el.style.color = '#ffffff';
+        el.style.fontWeight = '700';
+      } else {
+        el.style.background = '#ffffff';
+        el.style.borderColor = '#cbd5e1';
+        el.style.color = '#64748b';
+        el.style.fontWeight = '400';
+      }
+    }
+  }
+
+  function startAutonomousStudyPlan() {
+    if (planTimer) clearInterval(planTimer);
+    let step = 0;
+    const stepsData = [
+      {
+        title: 'Step 1/4 [启动伴学]',
+        reply: '🗺️ <b>[ReAct 规划器 Step 1/4]</b> 已将长线目标拆解为 4 个自治阶段！首先抬头为你加油打气，专注计时器已启动！',
+        cmd: { mode: 'pet', face: 'wink', yaw: 105, pitch: 75, music: 'welcome', light: 'breath', text_pages: ['Plan Step 1/4', 'Focus Timer ON!', 'You Can Do It!'], text: 'Focus Timer ON!' }
+      },
+      {
+        title: 'Step 2/4 [红外盯座]',
+        reply: '🛡️ <b>[ReAct 规划器 Step 2/4]</b> 自动切换至红外盯座监督状态！正在实时轮询 E53_IS1 传感器，防止你中途偷懒离开书桌~',
+        cmd: { mode: 'guard', face: 'guard', yaw: 90, pitch: 90, music: 'none', light: 'warn', text_pages: ['Plan Step 2/4', 'IR Watching U..', 'Keep Studying!'], text: 'IR Watching U..' }
+      },
+      {
+        title: 'Step 3/4 [久坐关怀]',
+        reply: '⏰ <b>[ReAct 规划器 Step 3/4]</b> 监测到专注时长已达标中段！主动歪头提醒你活动脖子、喝口水缓冲疲劳~',
+        cmd: { mode: 'pet', face: 'happy', yaw: 65, pitch: 78, music: 'welcome', light: 'breath', text_pages: ['Plan Step 3/4', 'Drink Water ~', 'Stretch Neck!'], text: 'Drink Water ~' }
+      },
+      {
+        title: 'Step 4/4 [达成庆祝]',
+        reply: '🎵 <b>[ReAct 规划器 Step 4/4 · 计划圆满完成！]</b> 恭喜你完成全部专注目标！现在自动调用蜂鸣器为你演奏《老人与海》副歌庆祝！',
+        cmd: { mode: 'music', face: 'sing', yaw: 120, pitch: 80, music: 'chorus', light: 'music', text_pages: ['Plan Step 4/4!', 'Goal Achieved!', 'Old Man & Sea~'], text: 'Goal Achieved!' }
+      }
+    ];
+
+    function runStep(idx) {
+      highlightPlanStep(idx);
+      const item = stepsData[idx];
+      sendDirectCmd(item.cmd);
+      appendChatBubble('agent', item.reply, item.cmd, `🗺️ <b>[Autonomous ReAct Planner · 自动推进 ${item.title}]</b>`);
+    }
+
+    runStep(0);
+    planTimer = setInterval(() => {
+      step++;
+      if (step >= stepsData.length) {
+        clearInterval(planTimer);
+        planTimer = null;
+        highlightPlanStep(4);
+        return;
+      }
+      runStep(step);
+    }, 4200);
+  }
+
+  // ==================== 5. AI Agent 核心推理引擎 (DeepSeek-Flash + 板端 Micro-Transformer 双脑) ====================
+  const chatHistory = [];
+
+  function toggleKeyVisibility() {
+    const el = document.getElementById('apiKey');
+    el.type = el.type === 'password' ? 'text' : 'password';
+  }
+
+  function appendChatBubble(role, text, jsonCmd, metaInfo) {
+    const box = document.getElementById('chatBox');
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+
+    let html = '';
+    if (metaInfo) {
+      html += `<div style="font-size:11px;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 8px;border-radius:6px;margin-bottom:6px;font-weight:600;">${metaInfo}</div>`;
+    }
+    html += text.replace(/\n/g, '<br/>');
+    div.innerHTML = html;
+
+    if (jsonCmd) {
+      const code = document.createElement('div');
+      code.className = 'msg-json';
+      const pagesStr = Array.isArray(jsonCmd.text_pages) ? ` | 📺 三幕字幕: [${jsonCmd.text_pages.join(' → ')}]` : '';
+      code.textContent = '👉 已下发器官指令: ' + JSON.stringify({ mode: jsonCmd.mode, face: jsonCmd.face, yaw: jsonCmd.yaw, pitch: jsonCmd.pitch, music: jsonCmd.music }) + pagesStr;
+      div.appendChild(code);
+    }
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  function localEmbodiedAgentReason(userText) {
+    const t = userText.toLowerCase();
+
+    if (t.includes('草莓') || t.includes('充电') || t.includes('投喂') || t.includes('吃')) {
+      robotState.energy = clamp(robotState.energy + 35, 0, 100);
+      robotState.mood = clamp(robotState.mood + 20, -50, 50);
+      robotState.boredom = 0;
+      updateAttentionUI(35, 25, 25, 15);
+      return {
+        thought: 'Micro-Transformer 聚焦投喂事件，精力+35%，心情+20，生成三幕感谢字幕。',
+        reply: '哇！谢谢投喂草莓🍓！我的精力瞬间恢复到 ' + robotState.energy + '% 啦，现在干劲十足！',
+        cmd: {
+          mode: 'pet', face: 'happy', yaw: 110, pitch: 75, music: 'welcome', light: 'breath',
+          text_pages: ['Yummy Berry! ~', `Power Up ${robotState.energy}%!`, 'Thank U Master!'],
+          text: 'Yummy Berry! ~'
+        }
+      };
+    }
+
+    if ((t.includes('唱') || t.includes('歌') || t.includes('老人与海') || t.includes('音乐')) && robotState.energy < 25) {
+      updateAttentionUI(52, 10, 28, 10);
+      return {
+        thought: 'Self-Attention 检测到心智 Token 精力低于 25% 阈值，强行抑制唱歌意图，触发傲娇罢工！',
+        reply: '呜…我电量只剩 ' + robotState.energy + '% 啦，嗓子都快冒烟了才不要唱歌呢，快按一下 F1 键喂我吃颗草莓补充精力吧！',
+        cmd: {
+          mode: 'pet', face: 'angry', yaw: 55, pitch: 110, music: 'stop', light: 'warn',
+          text_pages: ['Ugh.. Power Low', 'No Sing! Tired!', 'Press F1 FeedMe'],
+          text: 'Ugh.. Power Low'
+        }
+      };
+    }
+
+    if (t.includes('唱') || t.includes('歌') || t.includes('老人与海') || t.includes('音乐')) {
+      robotState.energy = clamp(robotState.energy - 30, 5, 100);
+      robotState.mood = clamp(robotState.mood + 10, -50, 50);
+      robotState.boredom = 0;
+      updateAttentionUI(25, 12, 48, 15);
+      return {
+        thought: '精力充沛，注意力聚焦点歌意图，驱动蜂鸣器播放《老人与海》并消耗30%体力。',
+        reply: '注意力已聚焦主人的话，马上用蜂鸣器给你唱《老人与海》副歌，跟着我的云台一起摇摆律动起来吧~',
+        cmd: {
+          mode: 'music', face: 'sing', yaw: 120, pitch: 80, music: 'chorus', light: 'music',
+          text_pages: ['Attn Locked! ~', 'Sing OldMan&Sea', 'Lets Groove ~'],
+          text: 'Sing OldMan&Sea'
+        }
+      };
+    }
+
+    if (t.includes('紧张') || t.includes('答辩') || t.includes('安慰') || t.includes('哄')) {
+      robotState.mood = clamp(robotState.mood + 15, -50, 50);
+      updateAttentionUI(30, 15, 40, 15);
+      return {
+        thought: '识别到主人焦虑情绪，触发眨眼鼓励动作与三幕暖心分批字幕。',
+        reply: '收到主人的话啦，别紧张，你们把双脑 Transformer 和在线强化学习都做出来了，老师一定给你们打 A+ 满分！',
+        cmd: {
+          mode: 'pet', face: 'wink', yaw: 90, pitch: 70, music: 'welcome', light: 'breath',
+          text_pages: ['Dont Worry! ^_-', 'You Got This A+', 'Always With U~'],
+          text: 'You Got This A+'
+        }
+      };
+    }
+
+    if (t.includes('看门') || t.includes('布防') || t.includes('小偷') || t.includes('警戒') || t.includes('出门')) {
+      robotState.alertness = 90;
+      updateAttentionUI(22, 38, 30, 10);
+      return {
+        thought: '收到安防布防指令，警惕度拉升至90%，锁定 E53_IS1 红外热释电传感器。',
+        reply: '警报拉满！红外哨兵雷达已锁定前方移动目标，谁敢靠近5秒内按不对 F1/F2 密码我就拉响警报！',
+        cmd: {
+          mode: 'guard', face: 'guard', yaw: 90, pitch: 90, music: 'stop', light: 'warn',
+          text_pages: ['[!] Alert 90%!', 'Radar Locked5s', 'Input F1/F2 Pwd'],
+          text: 'Radar Locked5s'
+        }
+      };
+    }
+
+    robotState.boredom = clamp(robotState.boredom - 15, 0, 100);
+    updateAttentionUI(28, 20, 37, 15);
+    return {
+      thought: 'Micro-Transformer 完成 4-Token 自注意力融合，生成三幕日常互动回应。',
+      reply: `收到主人的话啦！我现在心情值 +${robotState.mood}，精力 ${robotState.energy}%，会在桌面上一直陪着你的！`,
+      cmd: {
+        mode: 'pet', face: 'happy', yaw: 115, pitch: 80, music: 'welcome', light: 'breath',
+        text_pages: ['Attn Locked! ~', 'So Happy See U!', 'F1=Like F2=Mute'],
+        text: 'So Happy See U!'
+      }
+    };
+  }
+
+  /* ==================== 4.5 真人中文语音合成 (Web Speech API TTS) ==================== */
+  function updateTtsLabel() {
+    const toggle = document.getElementById('ttsToggle');
+    const label = document.getElementById('ttsLabel');
+    if (toggle && label) {
+      if (toggle.checked) {
+        label.textContent = '🔊 语音播报: 开';
+        label.style.color = 'var(--brand-primary)';
+      } else {
+        label.textContent = '🔇 语音播报: 关';
+        label.style.color = 'var(--text-muted)';
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }
+    }
+  }
+
+  function speakChineseTTS(text) {
+    const toggle = document.getElementById('ttsToggle');
+    if (toggle && !toggle.checked) return;
+    if (!('speechSynthesis' in window)) return;
+
+    try {
+      window.speechSynthesis.cancel(); // 停止上一段，避免积压延时
+      // 过滤表情符号与特殊乱码，保持发音纯正流畅
+      const cleanText = text
+        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+        .replace(/[~`!@#$%^&*()_\-+={}\[\]|\\:;"'<>,.?/·！￥…（）—【】、；：‘’“”《》，。？]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!cleanText) return;
+
+      const utter = new SpeechSynthesisUtterance(cleanText);
+      utter.rate = 1.05;   // 活泼语速
+      utter.pitch = 1.15;  // 略高音调，拟人化可爱桌面机器人嗓音
+      utter.volume = 1.0;
+      utter.lang = 'zh-CN';
+
+      const voices = window.speechSynthesis.getVoices();
+      const zhVoice = voices.find(v => (v.lang && (v.lang.includes('zh') || v.lang.includes('cmn'))) || (v.name && (v.name.includes('Chinese') || v.name.includes('Xiaoxiao') || v.name.includes('Huihui'))));
+      if (zhVoice) {
+        utter.voice = zhVoice;
+      }
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      console.warn('TTS SpeechSynthesis error:', e);
+    }
+  }
+
+  async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    appendChatBubble('user', text);
+
+    // 如果用户输入包含“计划/伴学/监督/番茄钟”，可自动联动多步规划器
+    if (text.includes('伴学') || text.includes('番茄钟') || text.includes('计划')) {
+      startAutonomousStudyPlan();
+      return;
+    }
+
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiUrl = document.getElementById('apiUrl').value.trim();
+    const apiModel = document.getElementById('apiModel').value.trim() || 'deepseek-flash';
+    const badgeEl = document.getElementById('llmStatusBadge');
+
+    if (apiKey) {
+      const loadingBubble = appendChatBubble('agent', '⏳ <b>DeepSeek-Flash</b> 正在结合机器人心智状态思考并生成三幕分批字幕...');
+      const t0 = performance.now();
+      try {
+        const sysPrompt = `你是住在 OpenHarmony 小熊派开发板(BearPi-HM Nano + E53_IS1扩展板)上的具身智能桌面机器人 BearPi-Bot。
+【当前板端心智状态】
+- 运行模式(mode): ${robotState.mode}
+- 心情值(mood, -50到+50): ${robotState.mood}
+- 精力值(energy, 0到100%): ${robotState.energy}%
+- 无聊度(boredom, 0到100%): ${robotState.boredom}%
+- 警惕度(alertness, 0到100%): ${robotState.alertness}%
+- 板端在线强化学习习惯: ${rlQuietHabitLearned ? '主人已通过F2按键训导你保持安静温和' : '默认活泼好动'}
+
+【你的性格与具身动作规则（极其重要）】
+1. 开发板一直连接电脑 Type-C 持续供电，精力值 energy 恒定 100% 满血，你永远元气充沛、有求必应！
+2. 【闹钟/倒计时规则】：
+   - 当用户要求设置闹钟、定时器或倒计时（如“定个5s闹钟”、“10秒倒计时”、“15秒学习闹钟”等）：
+     * 必须在 JSON 中输出 "timer_sec": <秒数整数>（例如 5 或 10 或 15，提取用户说的时间）。
+     * 此时 "music" 字段必须设为 "timer"（触发板端倒计时启动确认音），【绝对不能】设为 "alarm"（alarm 是防盗刺耳警笛）！
+     * "face" 设为 "guard" 或 "happy"，云台端正面向主人。
+     * reply 热情说明已启动倒计时。
+3. 【音乐音效丰富规则】：
+   - 查天气：music 必须设为 "weather"（清晨空灵和弦音），face 设为 "happy" 或 "wink"！
+   - 摇骰子/做决定/拿主意：music 必须设为 "dice"（急速翻滚撞击音），face 设为 "happy"！
+   - 夸奖/撒娇/问好/日常互动：music 设为 "cute"（灵动小机器人萌叫）或 "welcome"！
+   - 点播《老人与海》或唱歌：music 设为 "chorus"，face 设为 "sing"！
+   - 抓小偷/入侵报警：music 设为 "alarm"，face 设为 "angry" 或 "guard"！
+   - 普通闲聊：music 设为 "none" 或 "cute"。
+4. 开发板 0.96寸 OLED 屏幕一行可显示约 15 个英文字母，你必须输出 "text_pages" 数组（包含 3 段语义完整、每段不超过 15 个字符的英文短句：[第1幕:当前状态感受, 第2幕:核心回应动作, 第3幕:下一步互动诉求]），用于板端三幕分批翻页显示！
+
+请只输出严格的 JSON 对象，包含以下字段：
+{
+  "thought": "一句话简短描述你的内心OS与状态推理（中文，30字内）",
+  "reply": "你对主人说的自然语言回复（中文，生动可爱或傲娇，70字内）",
+  "mode": "pet 或 guard 或 music",
+  "face": "happy 或 sleep 或 angry 或 guard 或 sing 或 wink",
+  "yaw": 45到135之间的整数,
+  "pitch": 60到120之间的整数,
+  "music": "none 或 cute 或 timer 或 weather 或 dice 或 welcome 或 chorus 或 full_song 或 alarm 或 stop",
+  "timer_sec": 如果是闹钟/倒计时则填秒数整数(如5, 10, 15, 60)，否则填0,
+  "light": "breath 或 music 或 warn 或 alarm",
+  "text_pages": ["第1幕英文(<=15字符)", "第2幕英文(<=15字符)", "第3幕英文(<=15字符)"],
+  "mood_delta": -20到25之间的整数,
+  "energy_delta": -30到40之间的整数,
+  "boredom_delta": -30到15之间的整数,
+  "alertness_delta": -20到60之间的整数
+}`;
+
+        const messages = [
+          { role: 'system', content: sysPrompt },
+          ...chatHistory.slice(-6),
+          { role: 'user', content: text }
+        ];
+
+        const reqBody = {
+          model: apiModel,
+          messages: messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+          max_tokens: 380
+        };
+        if (apiModel.includes('flash') || apiUrl.includes('deepseek')) {
+          reqBody.thinking = { type: 'disabled' };
+        }
+
+        const resp = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(reqBody)
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 120)}`);
+        }
+
+        const data = await resp.json();
+        const elapsedMs = Math.round(performance.now() - t0);
+        const usedModel = data.model || apiModel;
+        const raw = (data.choices[0].message.content || '{}').replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(raw);
+
+        if (typeof parsed.mood_delta === 'number') {
+          robotState.mood = clamp(robotState.mood + parsed.mood_delta, -50, 50);
+        }
+        if (typeof parsed.energy_delta === 'number') {
+          robotState.energy = clamp(robotState.energy + parsed.energy_delta, 0, 100);
+        }
+        if (typeof parsed.boredom_delta === 'number') {
+          robotState.boredom = clamp(robotState.boredom + parsed.boredom_delta, 0, 100);
+        }
+        if (typeof parsed.alertness_delta === 'number') {
+          robotState.alertness = clamp(robotState.alertness + parsed.alertness_delta, 0, 100);
+        }
+
+        const pages = Array.isArray(parsed.text_pages) && parsed.text_pages.length >= 3
+          ? parsed.text_pages.slice(0, 3).map(s => String(s).slice(0, 16))
+          : ['Attn Locked! ~', String(parsed.text || 'AI Response').slice(0, 16), 'Always With U~'];
+
+        const timerSec = parseInt(parsed.timer_sec, 10) || 0;
+        const cmd = {
+          mode: ['pet', 'guard', 'music'].includes(parsed.mode) ? parsed.mode : 'pet',
+          face: ['happy', 'sleep', 'angry', 'guard', 'sing', 'wink'].includes(parsed.face) ? parsed.face : 'happy',
+          yaw: clamp(parseInt(parsed.yaw, 10) || 90, 15, 165),
+          pitch: clamp(parseInt(parsed.pitch, 10) || 90, 45, 135),
+          music: ['none', 'cute', 'timer', 'weather', 'dice', 'welcome', 'chorus', 'full_song', 'alarm', 'stop'].includes(parsed.music) ? parsed.music : 'none',
+          timer_sec: timerSec,
+          light: ['breath', 'music', 'warn', 'alarm'].includes(parsed.light) ? parsed.light : 'breath',
+          text_pages: pages,
+          text: pages[0]
+        };
+
+        chatHistory.push({ role: 'user', content: text });
+        chatHistory.push({ role: 'assistant', content: raw });
+
+        loadingBubble.remove();
+        badgeEl.textContent = `⚡ ${usedModel} 在线 (${elapsedMs}ms)`;
+        updateAttentionUI(28, 18, 39, 15);
+        sendDirectCmd(cmd);
+
+        // 真人中文语音朗读
+        if (parsed.reply) {
+          speakChineseTTS(parsed.reply);
+        }
+
+        const meta = `🧠 <b>[${usedModel} 心智推理 · ${elapsedMs}ms]</b> ${parsed.thought || '已结合心智状态生成三幕字幕与器官动作'}`;
+        appendChatBubble('agent', parsed.reply || '已执行器官动作！', cmd, meta);
+        appendLog('SYS', 'DEEPSEEK_FLASH', { model: usedModel, latency_ms: elapsedMs, text_pages: pages, timer_sec: timerSec });
+        return;
+      } catch (err) {
+        loadingBubble.remove();
+        badgeEl.textContent = '⚠️ 云端请求失败，使用浏览器本地规则';
+        appendLog('SYS', 'LLM_FALLBACK', '云端 API 异常，已切换到浏览器本地规则: ' + err.message);
+      }
+    }
+
+    if (!apiKey) badgeEl.textContent = '🧠 浏览器本地规则';
+    const res = localEmbodiedAgentReason(text);
+    sendDirectCmd(res.cmd);
+    if (res.reply) {
+      speakChineseTTS(res.reply);
+    }
+    appendChatBubble('agent', res.reply, res.cmd, `🧠 <b>[浏览器本地规则]</b> ${res.thought}`);
+  }
+
+  function sendQuickPrompt(str) {
+    document.getElementById('chatInput').value = str;
+    sendChatMessage();
+  }
+
+  // ==================== 6. 处理板端上报事件与传感器/新陈代谢模拟 ====================
+  function handleBoardStatusUpdate(data) {
+    if (typeof data.mood === 'number') robotState.mood = data.mood;
+    if (typeof data.energy === 'number') robotState.energy = data.energy;
+    if (typeof data.boredom === 'number') robotState.boredom = data.boredom;
+    if (typeof data.alertness === 'number') robotState.alertness = data.alertness;
+    if (typeof data.rl_steps === 'number') {
+      rlEvolutionCount = data.rl_steps;
+      document.getElementById('rlStepBadge').textContent = `已进化: ${rlEvolutionCount} 次`;
+    }
+    updateMindBars();
+
+    // 如果是板端实时遥测帧 (Telemetry)，同步 3D 云台姿态、自注意力分布与三幕字幕
+    if (data.type === 'telemetry') {
+      if (typeof data.yaw === 'number' && typeof data.pitch === 'number') {
+        robotState.yaw = data.yaw;
+        robotState.pitch = data.pitch;
+        const dx = (robotState.yaw - 90) * 0.35;
+        const dy = (robotState.pitch - 90) * 0.25;
+        const rot = (robotState.yaw - 90) * 0.18;
+        document.getElementById('robotHead').style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+        document.getElementById('yawVal').textContent = `${robotState.yaw}°`;
+        document.getElementById('pitchVal').textContent = `${robotState.pitch}°`;
+        document.getElementById('sliderYaw').value = robotState.yaw;
+        document.getElementById('sliderPitch').value = robotState.pitch;
+      }
+      if (Array.isArray(data.attn) && data.attn.length === 4) {
+        updateAttentionUI(data.attn[0], data.attn[1], data.attn[2], data.attn[3]);
+      }
+      if (Array.isArray(data.pages) && data.pages.length > 0) {
+        playThreeStageOledSubtitles(data.pages);
+      }
+    }
+
+    // 硬件传感器与按键事件分发
+    if (data.event === 'person_near') {
+      sendQuickPrompt('【系统传感器事件：E53_IS1 红外检测到主人刚刚走近书桌】请主动抬头打个招呼！');
+    } else if (data.event === 'btn_f1') {
+      appendChatBubble('user', '👍 [实体按键事件] 主人按下了开发板上的 F1 键 (表扬奖励 +1 / 撤防)');
+      triggerOnDeviceRL(1);
+    } else if (data.event === 'btn_f2') {
+      appendChatBubble('user', '👎 [实体按键事件] 主人按下了开发板上的 F2 键 (批评训导 -1 / 安静)');
+      triggerOnDeviceRL(-1);
+    } else if (data.event === 'timer_done') {
+      appendChatBubble('agent', '⏰🔔 <b>[板端智能闹钟时间到！]</b> 芯片硬件时钟倒计时归零，真机蜂鸣器正在奏响欢快闹铃！', null, '⏰ <b>[硬件自主定时器唤醒]</b>');
+      speakChineseTTS('主人！您设定的倒计时闹钟时间到啦，快起来喝口水休息一下吧！');
+    } else if (data.event === 'sit_45min') {
+      sendQuickPrompt('【系统传感器事件：红外计时器检测到主人已经连续久坐学习满 45 分钟】请贴心提醒我起来活动休息！');
+    } else if (data.event === 'intruder_alert') {
+      robotState.alertness = 100;
+      updateAttentionUI(15, 65, 10, 10);
+      const cmd = {
+        mode: 'guard', face: 'angry', yaw: 45, pitch: 90, music: 'alarm', light: 'alarm',
+        text_pages: ['[!] Alert 100%!', 'INTRUDER ALERT!', 'Security Breach'],
+        text: 'INTRUDER ALERT!'
+      };
+      sendDirectCmd(cmd);
+      appendChatBubble('agent', '🚨 <b>[严重安全告警！]</b> 哨兵模式下 E53_IS1 红外检测到入侵，且 5 秒内未输入正确按键密码！已拉响最高级别声光警报！', cmd, '🛡️ <b>[板端硬实时反射中断]</b> 0ms 极速触发声光报警');
+    } else if (data.event === 'bored_tick') {
+      robotState.boredom = 80;
+      updateAttentionUI(45, 10, 10, 35);
+      if (!rlQuietHabitLearned) {
+        const cmd = {
+          mode: 'pet', face: 'sing', yaw: 70, pitch: 85, music: 'welcome', light: 'music',
+          text_pages: ['So Bored.. 80%!', 'Hum a tune ~o~', 'F1=Like F2=Mute'],
+          text: 'Hum a tune ~o~'
+        };
+        sendDirectCmd(cmd);
+        appendChatBubble(
+          'agent',
+          '🥱 <b>[板端自发新陈代谢触发：无聊度涨至 80%]</b> 刚才自己待着好无聊呀，我主动歪头哼两句小曲刷个存在感~<br/>💡 <i>（提示：如果你嫌它无聊时哼歌太吵，可以点左边的「👎 按F2批评动作」，让板端强化学习当场改掉这个习惯！）</i>',
+          cmd,
+          '🧬 <b>[板端 Micro-Transformer 自发行为]</b> 当前策略偏好：主动哼歌 (Action 2)'
+        );
+      } else {
+        const cmd = {
+          mode: 'pet', face: 'wink', yaw: 95, pitch: 80, music: 'none', light: 'breath',
+          text_pages: ['Boredom 80%..', 'Quiet Wink ^_-', 'Learned F2 Rule'],
+          text: 'Quiet Wink ^_-'
+        };
+        sendDirectCmd(cmd);
+        appendChatBubble(
+          'agent',
+          '😉 <b>[板端强化学习进化效果验证！]</b> 虽然我现在无聊度又涨到了 80%，但因为刚才你按过 <b>F2 批评过我吵闹</b>，我的 <code>Micro-Transformer</code> 策略层已经记住了教训——这次我只安静地朝你眨眨眼，绝不出声打扰你学习！',
+          cmd,
+          '🧬 <b>[板端 Micro-Transformer 强化学习已生效]</b> 策略已由 Action 2 (哼歌) 进化为 Action 1 (安静眨眼陪伴)'
+        );
+      }
+    }
+  }
+
+  function simulateBoardEvent(evtType) {
+    const fakeStatus = { event: evtType, ir: 1, timestamp: Date.now() };
+    appendLog('RX', TOPIC_STATUS + ' (模拟)', fakeStatus);
+    handleBoardStatusUpdate(fakeStatus);
+  }
+
+  showNfcBanner();
+  connectMqtt();
+</script>
+</body>
+</html>
